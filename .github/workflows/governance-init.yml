@@ -1,0 +1,64 @@
+name: Initialize Compliance Governance
+
+on:
+    workflow_dispatch:
+        inputs:
+            program_id:
+                description: "Compliance program ID (deployed)"
+                required: true
+            members_csv:
+                description: "Comma-separated multisig members (pubkeys)"
+                required: true
+            threshold:
+                description: "Approvals required (e.g., 1)"
+                required: true
+                default: "1"
+            delay_seconds:
+                description: "Timelock delay in seconds (e.g., 0 for test, 86400 for 24h)"
+                required: true
+                default: "0"
+
+jobs:
+    init:
+        runs-on: ubuntu-latest
+        env:
+            RPC_URL: ${{ secrets.RPC_URL }}
+            PAYER_KEYPAIR_PATH: /home/runner/.config/solana/ops.json
+            PAYER_KEYPAIR_JSON: ${{ secrets.PAYER_KEYPAIR_JSON }}
+        steps:
+            - name: Safety checks
+              run: |
+                  if [ -z "$RPC_URL" ]; then echo "RPC_URL secret is required"; exit 1; fi
+                  if [ -z "$PAYER_KEYPAIR_JSON" ]; then echo "PAYER_KEYPAIR_JSON secret is required"; exit 1; fi
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Setup Rust
+              uses: dtolnay/rust-toolchain@stable
+            - name: Install Solana CLI
+              run: |
+                  sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
+                  echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+                  solana --version
+            - name: Install Anchor CLI
+              run: |
+                  cargo install --locked anchor-cli --version 0.30.1
+                  anchor --version
+            - name: Write payer keypair and set Solana config
+              run: |
+                  mkdir -p ~/.config/solana
+                  echo "$PAYER_KEYPAIR_JSON" > "$PAYER_KEYPAIR_PATH"
+                  cat "$PAYER_KEYPAIR_PATH" | jq -e . > /dev/null
+                  solana config set --url "$RPC_URL"
+                  solana address -k "$PAYER_KEYPAIR_PATH"
+            - name: Build to generate IDL
+              run: anchor build -p compliance_wrapper
+            - name: Initialize Governance (1 tx)
+              env:
+                  RPC_URL: ${{ env.RPC_URL }}
+                  PAYER_KEYPAIR: ${{ env.PAYER_KEYPAIR_PATH }}
+                  COMPLIANCE_PROGRAM_ID: ${{ github.event.inputs.program_id }}
+                  GOVERNANCE_MEMBERS: ${{ github.event.inputs.members_csv }}
+                  GOVERNANCE_THRESHOLD: ${{ github.event.inputs.threshold }}
+                  GOVERNANCE_DELAY_SECONDS: ${{ github.event.inputs.delay_seconds }}
+              run: |
+                  node src/governance/init_governance.js

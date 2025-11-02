@@ -12,3 +12,9 @@ yarn-error.log*
 
 # Solana keys (do NOT commit real keys)
 id.json
+
+# Local keys folder (do NOT commit)
+.keys/
+
+# Anchor build artifacts and program keypairs
+target/

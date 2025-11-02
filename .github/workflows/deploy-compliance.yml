@@ -1,0 +1,86 @@
+name: Deploy Compliance Wrapper
+
+on:
+    workflow_dispatch:
+        inputs:
+            program_id:
+                description: "Program ID to deploy (must match declare_id! in compliance_wrapper)"
+                required: true
+            confirm:
+                description: "Type YES to deploy"
+                required: true
+                default: "NO"
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        env:
+            RPC_URL: ${{ secrets.RPC_URL }}
+            # Wallet that will own upgrade authority of the program
+            ANCHOR_WALLET_PATH: /home/runner/.config/solana/anchor-deployer.json
+            ANCHOR_WALLET_JSON: ${{ secrets.ANCHOR_WALLET_JSON }}
+            # Program keypair (address must equal input program_id)
+            PROGRAM_KEYPAIR_PATH: programs/compliance_wrapper/target/deploy/compliance_wrapper-keypair.json
+            PROGRAM_KEYPAIR_JSON: ${{ secrets.COMPLIANCE_PROGRAM_KEYPAIR_JSON }}
+        steps:
+            - name: Safety confirmation
+              run: |
+                  if [ "${{ github.event.inputs.confirm }}" != "YES" ]; then
+                    echo "Confirmation not provided. Set confirm=YES to proceed."
+                    exit 1
+                  fi
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Setup Rust
+              uses: dtolnay/rust-toolchain@stable
+            - name: Install Solana CLI
+              run: |
+                  sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
+                  echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+                  solana --version
+            - name: Install Anchor CLI
+              run: |
+                  cargo install --locked anchor-cli --version 0.30.1
+                  anchor --version
+            - name: Prepare wallets and program keypair
+              run: |
+                  mkdir -p ~/.config/solana
+                  echo "$ANCHOR_WALLET_JSON" > "$ANCHOR_WALLET_PATH"
+                  mkdir -p programs/compliance_wrapper/target/deploy
+                  echo "$PROGRAM_KEYPAIR_JSON" > "$PROGRAM_KEYPAIR_PATH"
+                  # Validate JSON
+                  cat "$ANCHOR_WALLET_PATH" | jq -e . > /dev/null
+                  cat "$PROGRAM_KEYPAIR_PATH" | jq -e . > /dev/null
+            - name: Patch Program ID in sources and Anchor.toml
+              run: |
+                  PID='${{ github.event.inputs.program_id }}'
+                  # Update declare_id in Rust
+                  sed -i "s/^declare_id!(\".*\");$/declare_id!(\"${PID}\");/" programs/compliance_wrapper/src/lib.rs
+                  # Anchor.toml: add/replace mainnet entry for compliance_wrapper
+                  if grep -q "\[programs.mainnet\]" Anchor.toml; then
+                    if grep -q "^compliance_wrapper = \".*\"$" Anchor.toml; then
+                      sed -i "/\\[programs.mainnet\\\]/,/^$/ s/^compliance_wrapper = \".*\"$/compliance_wrapper = \"${PID}\"/" Anchor.toml || true
+                    else
+                      awk '/\[programs.mainnet\]/{print; print "compliance_wrapper = \"'"${PID}"'\""; next}1' Anchor.toml > Anchor.toml.tmp && mv Anchor.toml.tmp Anchor.toml
+                    fi
+                  else
+                    printf "\n[programs.mainnet]\ncompliance_wrapper = \"%s\"\n" "$PID" >> Anchor.toml
+                  fi
+                  # Provider to custom (use RPC_URL secret)
+                  if grep -q "\[provider\]" Anchor.toml; then
+                    sed -i "/\\[provider\\\]/,/^$/ s/^cluster = \".*\"$/cluster = \"custom\"/" Anchor.toml || true
+                    sed -i "/\\[provider\\\]/,/^$/ s|^wallet = \".*\"$|wallet = \"${ANCHOR_WALLET_PATH}\"|" Anchor.toml || true
+                  else
+                    printf "\n[provider]\ncluster = \"custom\"\nwallet = \"%s\"\n" "$ANCHOR_WALLET_PATH" >> Anchor.toml
+                  fi
+                  echo "Patched Program ID and provider settings for compliance_wrapper."
+            - name: Set Solana config
+              run: |
+                  solana config set --url "$RPC_URL"
+                  solana address -k "$ANCHOR_WALLET_PATH"
+            - name: Build program
+              run: anchor build -p compliance_wrapper
+            - name: Deploy program
+              env:
+                  ANCHOR_WALLET: ${{ env.ANCHOR_WALLET_PATH }}
+              run: anchor deploy -p compliance_wrapper --provider.cluster custom --provider.url "$RPC_URL"

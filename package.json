@@ -14,7 +14,20 @@
     "allocate:dev+lock": "node src/timelock/allocate_and_lock.js",
     "metadata:update": "node src/metadata/update_metadata.js",
     "governance:preflight": "node src/governance/preflight.js",
-    "governance:init": "node src/governance/init_governance.js"
+    "governance:init": "node src/governance/init_governance.js",
+    "governance:delay:toggle": "node src/governance/switch_delay.js toggle",
+    "governance:delay:fast": "node src/governance/switch_delay.js 0",
+    "governance:delay:prod": "node src/governance/switch_delay.js 86400",
+    "program:patch-id": "node src/tools/patch_program_id.js"
+  },
+  "devDependencies": {},
+  "bin": {
+    "program:patch-id": "src/tools/patch_program_id.js"
+  },
+  "optionalScripts": {
+    "keygen:wallet": "node src/tools/gen_keypair.js .keys/ops.json",
+    "keygen:program": "node src/tools/gen_keypair.js .keys/compliance_wrapper-keypair.json",
+    "secret:b64": "node src/tools/print_b64.js"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.0",
