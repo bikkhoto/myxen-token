@@ -1,5 +1,6 @@
 [programs.localnet]
 timelock_vault = "Timelock1111111111111111111111111111111111"
+compliance_wrapper = "CompWrap111111111111111111111111111111111"
 
 [registry]
 url = "https://anchor.projectserum.com"

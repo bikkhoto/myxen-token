@@ -11,7 +11,10 @@
     "calc:test": "node src/test_supply_calc.js",
     "timelock:init": "node src/timelock/initialize_vault.js",
     "timelock:release": "node src/timelock/release_vault.js",
-    "allocate:dev+lock": "node src/timelock/allocate_and_lock.js"
+    "allocate:dev+lock": "node src/timelock/allocate_and_lock.js",
+    "metadata:update": "node src/metadata/update_metadata.js",
+    "governance:preflight": "node src/governance/preflight.js",
+    "governance:init": "node src/governance/init_governance.js"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.0",

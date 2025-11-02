@@ -49,6 +49,20 @@ This will:
 
 The script prints the Mint address, supply, and authorities at the end. Save the Mint address.
 
+Optional: Metadata before revoke
+
+You can set token metadata (name, symbol, uri) during creation by setting these in `.env`:
+
+- METADATA_NAME
+- METADATA_SYMBOL
+- METADATA_URI (point to your JSON on Arweave/IPFS)
+
+The script will create metadata before revoking mint authority. To update metadata later (using the metadata update authority), use:
+
+```bash
+npm run metadata:update -- <MINT>
+```
+
 ## 5) Verify the token
 
 ```bash
