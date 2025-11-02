@@ -113,16 +113,5 @@ jobs:
       - name: Initialize timelock and lock 600M
         run: npm run allocate:dev+lock
       - name: Final verify (prints authorities/supply)
-        run: npm run verify -- ${{ steps.mint.outputs.mint }}
-                  set -e
-                  npm run create | tee create.log
-                  MINT_ADDRESS=$(grep -E '^Mint: ' create.log | tail -n1 | awk '{print $2}')
-                  if [ -z "$MINT_ADDRESS" ]; then echo "Failed to capture mint address"; exit 1; fi
-                  echo "MINT_ADDRESS=$MINT_ADDRESS" | tee -a .env
-                  echo "mint=$MINT_ADDRESS" >> "$GITHUB_OUTPUT"
-            - name: Verify mint
-              run: npm run verify -- ${{ steps.mint.outputs.mint }}
-            - name: Initialize timelock and lock 600M
-              run: npm run allocate:dev+lock
-            - name: Final verify (prints authorities/supply)
-              run: npm run verify -- ${{ steps.mint.outputs.mint }}
+        run: |
+          npm run verify -- "${{ steps.mint.outputs.mint }}"
