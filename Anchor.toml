@@ -1,0 +1,12 @@
+[programs.localnet]
+timelock_vault = "Timelock1111111111111111111111111111111111"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "node"

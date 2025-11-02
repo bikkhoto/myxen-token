@@ -1,0 +1,128 @@
+name: Mint and Lock (One-off)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type YES to mint 1B to DEV_WALLET, revoke authorities, and lock 600M"
+        required: true
+        default: "NO"
+      metadata_name:
+        description: "Optional: Token name (for metadata)"
+        required: false
+      metadata_symbol:
+        description: "Optional: Token symbol (for metadata)"
+        required: false
+      metadata_uri:
+        description: "Optional: Token metadata URI (Arweave/IPFS)"
+        required: false
+      metadata_update_authority_pubkey:
+        description: "Optional: Update authority pubkey (defaults to payer)"
+        required: false
+
+concurrency:
+  group: mint-and-lock
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      RPC_URL: ${{ secrets.RPC_URL }}
+      PROGRAM_ID: ${{ secrets.PROGRAM_ID }}
+      DEV_WALLET: ${{ secrets.DEV_WALLET }}
+      PAYER_KEYPAIR_PATH: /home/runner/.config/solana/id.json
+      PAYER_KEYPAIR_JSON: ${{ secrets.PAYER_KEYPAIR_JSON }}
+      INITIAL_SUPPLY: "1000000000"
+      MINT_DECIMALS: "9"
+      REVOKE_FREEZE_AUTHORITY: "true"
+      RELEASE_AT_ISO: "2025-12-30T00:00:00Z"
+      LOCK_AMOUNT: "600000000"
+      METADATA_NAME: ${{ secrets.METADATA_NAME }}
+      METADATA_SYMBOL: ${{ secrets.METADATA_SYMBOL }}
+      METADATA_URI: ${{ secrets.METADATA_URI }}
+      METADATA_UPDATE_AUTHORITY_PUBKEY: ${{ secrets.METADATA_UPDATE_AUTHORITY_PUBKEY }}
+    steps:
+      - name: Safety confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "YES" ]; then
+            echo "Confirmation not provided. Set inputs.confirm=YES to proceed."
+            exit 1
+          fi
+      - name: Check required secrets
+        run: |
+          for v in RPC_URL PROGRAM_ID DEV_WALLET PAYER_KEYPAIR_JSON; do
+            if [ -z "${!v}" ]; then echo "Missing secret: $v"; exit 1; fi
+          done
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        run: npm ci || npm install
+      - name: Prepare Solana keypair
+        run: |
+          mkdir -p ~/.config/solana
+          echo "$PAYER_KEYPAIR_JSON" > "$PAYER_KEYPAIR_PATH"
+          echo "$PAYER_KEYPAIR_JSON" | jq -e . >/dev/null
+      - name: Write .env for this run
+        run: |
+          NAME_INPUT='${{ github.event.inputs.metadata_name }}'
+          SYMBOL_INPUT='${{ github.event.inputs.metadata_symbol }}'
+          URI_INPUT='${{ github.event.inputs.metadata_uri }}'
+          UA_INPUT='${{ github.event.inputs.metadata_update_authority_pubkey }}'
+          NAME="${NAME_INPUT:-}"; [ -z "$NAME" ] && NAME="${METADATA_NAME:-}"
+          SYMBOL="${SYMBOL_INPUT:-}"; [ -z "$SYMBOL" ] && SYMBOL="${METADATA_SYMBOL:-}"
+          URI="${URI_INPUT:-}"; [ -z "$URI" ] && URI="${METADATA_URI:-}"
+          UA="${UA_INPUT:-}"; [ -z "$UA" ] && UA="${METADATA_UPDATE_AUTHORITY_PUBKEY:-}"
+          cat > .env << EOF
+          RPC_URL=${{ env.RPC_URL }}
+          PAYER_KEYPAIR=${{ env.PAYER_KEYPAIR_PATH }}
+          DEV_WALLET=${{ env.DEV_WALLET }}
+          DESTINATION_OWNER=${{ env.DEV_WALLET }}
+          SOURCE_OWNER=${{ env.DEV_WALLET }}
+          MINT_DECIMALS=${{ env.MINT_DECIMALS }}
+          INITIAL_SUPPLY=${{ env.INITIAL_SUPPLY }}
+          REVOKE_FREEZE_AUTHORITY=${{ env.REVOKE_FREEZE_AUTHORITY }}
+          PROGRAM_ID=${{ env.PROGRAM_ID }}
+          RELEASE_AT_ISO=${{ env.RELEASE_AT_ISO }}
+          LOCK_AMOUNT=${{ env.LOCK_AMOUNT }}
+          METADATA_NAME=$NAME
+          METADATA_SYMBOL=$SYMBOL
+          METADATA_URI=$URI
+          METADATA_UPDATE_AUTHORITY_PUBKEY=$UA
+          EOF
+      - name: Guard RPC network (warn if not mainnet)
+        run: |
+          if echo "$RPC_URL" | grep -qi devnet; then
+            echo "WARNING: RPC_URL appears to be Devnet. For mainnet, set a mainnet-beta RPC." >&2
+          fi
+      - name: Mint fixed supply to DEV_WALLET and revoke authorities
+        id: mint
+        run: |
+          set -e
+          npm run create | tee create.log
+          MINT_ADDRESS=$(grep -E "^Mint: " create.log | tail -n1 | cut -d' ' -f2)
+          if [ -z "$MINT_ADDRESS" ]; then echo "Failed to capture mint address"; exit 1; fi
+          echo "MINT_ADDRESS=$MINT_ADDRESS" | tee -a .env
+          echo "mint=$MINT_ADDRESS" >> "$GITHUB_OUTPUT"
+      - name: Verify mint
+        run: npm run verify -- ${{ steps.mint.outputs.mint }}
+      - name: Initialize timelock and lock 600M
+        run: npm run allocate:dev+lock
+      - name: Final verify (prints authorities/supply)
+        run: npm run verify -- ${{ steps.mint.outputs.mint }}
+                  set -e
+                  npm run create | tee create.log
+                  MINT_ADDRESS=$(grep -E '^Mint: ' create.log | tail -n1 | awk '{print $2}')
+                  if [ -z "$MINT_ADDRESS" ]; then echo "Failed to capture mint address"; exit 1; fi
+                  echo "MINT_ADDRESS=$MINT_ADDRESS" | tee -a .env
+                  echo "mint=$MINT_ADDRESS" >> "$GITHUB_OUTPUT"
+            - name: Verify mint
+              run: npm run verify -- ${{ steps.mint.outputs.mint }}
+            - name: Initialize timelock and lock 600M
+              run: npm run allocate:dev+lock
+            - name: Final verify (prints authorities/supply)
+              run: npm run verify -- ${{ steps.mint.outputs.mint }}

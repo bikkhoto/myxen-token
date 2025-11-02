@@ -1,0 +1,51 @@
+name: Timelock Release
+
+on:
+    schedule:
+        # Run at 00:00 UTC on December 30th every year; job will check the year == 2025
+        - cron: "0 0 30 12 *"
+    workflow_dispatch: {}
+
+concurrency:
+    group: timelock-release
+    cancel-in-progress: false
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        env:
+            # Required inputs – set these in repo Settings > Secrets and variables
+            RPC_URL: ${{ secrets.RPC_URL }}
+            PROGRAM_ID: ${{ secrets.PROGRAM_ID }}
+            MINT_ADDRESS: ${{ secrets.MINT_ADDRESS }}
+            DEV_WALLET: ${{ secrets.DEV_WALLET }}
+            RELEASE_AT_ISO: "2025-12-30T00:00:00Z"
+            PAYER_KEYPAIR_PATH: /home/runner/.config/solana/id.json
+        steps:
+            - name: Guard for correct year (2025)
+              run: |
+                  YEAR=$(date -u +%Y)
+                  if [ "$YEAR" != "2025" ]; then
+                    echo "Not the target year ($YEAR). Exiting."
+                    exit 0
+                  fi
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+            - name: Install deps
+              run: npm ci || npm install
+            - name: Prepare Solana keypair
+              run: |
+                  mkdir -p ~/.config/solana
+                  echo "$PAYER_KEYPAIR_JSON" > "$PAYER_KEYPAIR_PATH"
+                  # Basic sanity check the JSON
+                  cat "$PAYER_KEYPAIR_PATH" | jq -e . > /dev/null
+              env:
+                  PAYER_KEYPAIR_JSON: ${{ secrets.PAYER_KEYPAIR_JSON }}
+            - name: Run release
+              env:
+                  PAYER_KEYPAIR: ${{ env.PAYER_KEYPAIR_PATH }}
+              run: npm run timelock:release

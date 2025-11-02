@@ -1,0 +1,23 @@
+{
+  "name": "myxen-token-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scripts to create and verify a fixed-supply SPL token on Solana.",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "create": "node src/create_fixed_supply_token.js",
+    "verify": "node src/verify_token.js",
+    "calc:test": "node src/test_supply_calc.js",
+    "timelock:init": "node src/timelock/initialize_vault.js",
+    "timelock:release": "node src/timelock/release_vault.js",
+    "allocate:dev+lock": "node src/timelock/allocate_and_lock.js"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.0",
+    "dotenv": "^16.4.0",
+    "@coral-xyz/anchor": "^0.30.1",
+    "@metaplex-foundation/mpl-token-metadata": "^3.3.0"
+  }
+}
